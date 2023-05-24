@@ -8,4 +8,4 @@ setup(name='py-consul-tiny',
       author_email='support@updcon.net',
       license='MIT',
       packages=['consul'],
-      install_requires=['requests'])
+      install_requires=['requests', 'apscheduler'])

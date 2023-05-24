@@ -1,12 +1,59 @@
 import requests
+import logging
 from requests import HTTPError
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
 
 
 class ConsulAgent(object):
 
-    def __init__(self, path, token=None):
+    def __init__(self, path, service, token=None):
         self.path = path
+        self.service = service
         self.token = token
+        self.scheduler = BackgroundScheduler(
+            {
+                'apscheduler.executors.default': {
+                    'class': 'apscheduler.executors.pool:ThreadPoolExecutor',
+                    'max_workers': '20'
+                },
+                'apscheduler.executors.processpool': {
+                    'type': 'processpool',
+                    'max_workers': '2'
+                },
+                'apscheduler.job_defaults.coalesce': 'false',
+                'apscheduler.job_defaults.max_instances': '2',
+                'apscheduler.timezone': 'UTC'
+            })
+
+        def jobs_listener(event):
+            log = logging.getLogger('apscheduler')
+            log.setLevel(logging.INFO)
+
+            if event.exception:
+                log.warning('job %s failed', event.job_id)
+            else:
+                log.info('job %s executed successfully', event.job_id)
+
+        self.scheduler.add_listener(jobs_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
+        self.job = self.scheduler.add_job(self.check_update_with_register,
+                                          'cron',
+                                          kwargs={
+                                              'check_id': self.service + ':ttl_check',
+                                              'id': self.service,
+                                              'address': '127.0.0.1',
+                                              'port': 8080,
+                                              'checks': [{
+                                                  'CheckId': self.service + ':ttl_check',
+                                                  'TTL': '40s',
+                                                  'DeregisterCriticalServiceAfter': '15m',
+                                              }]},
+                                          hour='*/1')
+
+    def __del__(self):
+        self.scheduler.remove_job(self.job.id)
+        self.scheduler.shutdown()
+        self.service_deregister(self.service)
 
     def _get(self, path):
         response = requests.get(self.path + path)
