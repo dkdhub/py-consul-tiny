@@ -3,6 +3,10 @@ import logging
 from requests import HTTPError
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
+from requests.adapters import (
+    Retry,
+    HTTPAdapter
+)
 
 
 class ConsulAgent(object):
@@ -25,6 +29,11 @@ class ConsulAgent(object):
                 'apscheduler.job_defaults.max_instances': '2',
                 'apscheduler.timezone': 'UTC'
             })
+        self.session = requests.Session()
+        self.session.mount(adapter=HTTPAdapter(
+            max_retries=Retry(total=1,
+                              backoff_factor=0.5,
+                              status_forcelist=[500, 502, 503, 504])))
 
         def jobs_listener(event):
             log = logging.getLogger('apscheduler')
@@ -53,15 +62,16 @@ class ConsulAgent(object):
     def __del__(self):
         self.scheduler.remove_job(self.job.id)
         self.scheduler.shutdown()
+        self.session.close()
         self.service_deregister(self.service)
 
     def _get(self, path):
-        response = requests.get(self.path + path)
+        response = self.session.get(self.path + path)
         response.raise_for_status()
         return response.json()
 
     def _put(self, path, request=None):
-        response = requests.put(self.path + path, json=request)
+        response = self.session.put(self.path + path, json=request)
         response.raise_for_status()
         return response.json() if response.content else None
 
