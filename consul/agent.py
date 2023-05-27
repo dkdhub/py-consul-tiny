@@ -38,6 +38,7 @@ class ConsulAgent(object):
         self.token = token
         self.every_minutes = every_minutes
         self.catalog_node = catalog_node
+        self.autoremove_entity = bool(catalog_node)
         self.message = message
 
         self._check_id = self.instance + self._check_sub
@@ -80,9 +81,11 @@ class ConsulAgent(object):
                 self.job = None
             if self.scheduler.running:
                 self.scheduler.shutdown()
+                del self.scheduler
+                self.scheduler = None
         if self.session:
             self.service_deregister(self.instance)
-            if self.catalog_node:
+            if self.autoremove_entity:
                 self.catalog_deregister(self.catalog_node)
             self.session.close()
             self.session = None
@@ -175,6 +178,9 @@ class ConsulAgent(object):
         self.message = message
         self._reset_message(status=status)
         return self
+
+    def autoremove_catalog_record(self, v: bool):
+        self.autoremove_entity = bool(v)
 
     def catalog_nodes(self):
         return self._get("/nodes", catalog=True)
