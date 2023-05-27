@@ -78,7 +78,8 @@ class ConsulAgent(object):
             if self.job:
                 self.scheduler.remove_job(self.job.id)
                 self.job = None
-            self.scheduler.shutdown()
+            if self.scheduler.running:
+                self.scheduler.shutdown()
         if self.session:
             self.service_deregister(self.instance)
             if self.catalog_node:
