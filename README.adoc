@@ -17,6 +17,7 @@ $ . .env/bin/activate
 [source, python]
 ----
 import logging
+import time
 from consul.agent import ConsulAgent
 
 logging.basicConfig(level=logging.DEBUG)
